@@ -157,7 +157,7 @@ index=main sourcetype=access_combined
 
 ## 📊 Detection Findings Summary
 
-See [`reports/detection_findings_report.md`](reports/detection_findings_report.md) for full documented findings from running all detections against the sample logs.
+See [`reports/detection_findings_report.md`](https://github.com/SathvikManuka/Splunk-SIEM-Threat-Detection/blob/main/detection_findings_report.md) for full documented findings from running all detections against the sample logs.
 
 ---
 
