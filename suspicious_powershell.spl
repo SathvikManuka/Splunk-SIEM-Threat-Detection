@@ -1,0 +1,54 @@
+| ============================================================
+| Detection Rule: Suspicious PowerShell Execution
+| MITRE ATT&CK  : T1059.001 - PowerShell
+| Severity      : HIGH
+| Author        : Manuka Sathvik
+| ============================================================
+|
+| DESCRIPTION:
+|   Detects malicious PowerShell patterns via Event ID 4104
+|   (Script Block Logging). Looks for common attacker
+|   techniques including:
+|     - Base64 encoded commands     (-enc, -EncodedCommand)
+|     - Execution policy bypass     (-bypass, -ep bypass)
+|     - Hidden window execution     (-windowstyle hidden)
+|     - Download cradles             (DownloadString, IEX)
+|     - Invoke-Expression            (IEX, Invoke-Expression)
+|     - AMSI bypass attempts        (AmsiUtils, amsiInitFailed)
+|
+| PREREQUISITE:
+|   Enable PowerShell Script Block Logging via Group Policy:
+|   Computer Config → Admin Templates → PowerShell → Script Block Logging → Enabled
+|
+| FALSE POSITIVES:
+|   Some legitimate admin tools use -enc. Review ScriptBlockText
+|   before blocking. Add known-good scripts to a whitelist.
+
+index=main sourcetype=WinEventLog EventCode=4104
+| search ScriptBlockText IN (
+    "*-enc*",
+    "*-EncodedCommand*",
+    "*-bypass*",
+    "*-ep bypass*",
+    "*-windowstyle hidden*",
+    "*DownloadString*",
+    "*DownloadFile*",
+    "*IEX*",
+    "*Invoke-Expression*",
+    "*Invoke-Mimikatz*",
+    "*AmsiUtils*",
+    "*amsiInitFailed*",
+    "*Net.WebClient*",
+    "*WebRequest*"
+  )
+| rex field=ScriptBlockText "(?P<ioc_keyword>-enc|-bypass|DownloadString|IEX|Invoke-Expression|Invoke-Mimikatz|AmsiUtils)"
+| stats
+    count,
+    values(ioc_keyword)     as matched_keywords,
+    values(ScriptBlockText) as script_samples
+  by ComputerName, User
+| eval mitre_technique="T1059.001 - Command and Scripting Interpreter: PowerShell"
+| eval severity="HIGH"
+| eval recommendation="Isolate endpoint, review full script block, check for persistence mechanisms (T1547)"
+| table ComputerName, User, count, matched_keywords, severity, recommendation, mitre_technique
+| sort -count

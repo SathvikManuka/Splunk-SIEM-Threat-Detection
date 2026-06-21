@@ -1,0 +1,46 @@
+| ============================================================
+| Detection Rule: Privilege Escalation - Sensitive Privileges
+| MITRE ATT&CK  : T1078 - Valid Accounts
+| Severity      : HIGH
+| Author        : Manuka Sathvik
+| ============================================================
+|
+| DESCRIPTION:
+|   Windows Event 4672 fires whenever a user logs in with
+|   special privileges (SeDebugPrivilege, SeTakeOwnership,
+|   SeLoadDriverPrivilege etc.).
+|
+|   Multiple 4672 events from the same account — especially
+|   outside business hours or from unusual IPs — indicates:
+|     - Compromised privileged account
+|     - Lateral movement using stolen credentials
+|     - Insider privilege abuse
+|
+| HOW TO USE:
+|   Requires Windows Security Event Log forwarding to Splunk.
+|   Adjust business_hours filter to your org's timezone.
+
+index=main sourcetype=WinEventLog EventCode=4672
+| eval hour=strftime(_time, "%H")
+| eval business_hours=if(hour>=8 AND hour<=18, "yes", "no")
+| stats
+    count,
+    values(Logon_Type)   as logon_types,
+    values(src_ip)       as source_ips,
+    dc(src_ip)           as unique_src_ips
+  by Account_Name, business_hours
+| where count > 3
+| eval mitre_technique="T1078 - Valid Accounts"
+| eval severity=case(
+    business_hours="no" AND count > 5, "CRITICAL",
+    unique_src_ips > 3,                "HIGH",
+    count > 10,                        "HIGH",
+    true(),                            "MEDIUM"
+  )
+| eval alert=case(
+    severity="CRITICAL", "After-hours privileged login - possible account compromise",
+    severity="HIGH",     "Privileged account used from multiple IPs",
+    true(),              "Elevated privilege assignment - review required"
+  )
+| table Account_Name, count, unique_src_ips, business_hours, severity, alert, mitre_technique
+| sort -count

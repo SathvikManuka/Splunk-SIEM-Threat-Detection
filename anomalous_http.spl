@@ -1,0 +1,53 @@
+| ============================================================
+| Detection Rule: Anomalous HTTP Traffic / Data Exfiltration
+| MITRE ATT&CK  : T1071.001 - Application Layer Protocol: Web
+|                 T1048.003 - Exfiltration Over Unencrypted HTTP
+| Severity      : MEDIUM / HIGH
+| Author        : Manuka Sathvik
+| ============================================================
+|
+| DESCRIPTION:
+|   Identifies two HTTP anomaly patterns:
+|
+|   1. HIGH VOLUME REQUESTS — possible credential stuffing,
+|      web scraping, or automated scanning (200+ requests
+|      to the same URI from one IP).
+|
+|   2. LARGE RESPONSE SIZES — possible data exfiltration
+|      where an attacker is pulling large amounts of data
+|      over HTTP (avg response > 500KB).
+|
+| FALSE POSITIVE TUNING:
+|   CDN IPs, load balancers, and monitoring agents can
+|   trigger volume alerts. Whitelist known internal scanners.
+
+index=main sourcetype=access_combined
+| rex field=_raw "(?P<src_ip>\d+\.\d+\.\d+\.\d+) - - \[.*?\] \"(?P<method>\w+) (?P<uri_path>\S+).*?\" (?P<status>\d+) (?P<bytes>\d+)"
+| eval bytes=tonumber(bytes)
+| stats
+    count                   as request_count,
+    avg(bytes)              as avg_response_bytes,
+    sum(bytes)              as total_bytes_transferred,
+    dc(uri_path)            as unique_uris,
+    values(status)          as http_status_codes
+  by src_ip
+| where request_count > 200 AND match(mvjoin(http_status_codes, ","), "200")
+| eval avg_response_kb=round(avg_response_bytes/1024, 2)
+| eval total_mb=round(total_bytes_transferred/1048576, 2)
+| eval mitre_technique=case(
+    avg_response_bytes > 500000, "T1048.003 - Exfiltration Over Unencrypted HTTP",
+    true(),                      "T1071.001 - Application Layer Protocol: Web"
+  )
+| eval severity=case(
+    avg_response_bytes > 500000 AND request_count > 500, "HIGH",
+    avg_response_bytes > 500000,                         "HIGH",
+    request_count > 1000,                                "MEDIUM",
+    true(),                                              "LOW"
+  )
+| eval alert=case(
+    avg_response_bytes > 500000, "Possible data exfiltration - large average response size",
+    request_count > 500,         "High volume HTTP - possible scraping or credential stuffing",
+    true(),                      "Anomalous HTTP volume - review"
+  )
+| table src_ip, request_count, avg_response_kb, total_mb, unique_uris, severity, alert, mitre_technique
+| sort -request_count

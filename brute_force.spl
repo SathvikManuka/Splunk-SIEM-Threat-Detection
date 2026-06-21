@@ -1,0 +1,37 @@
+| ============================================================
+| Detection Rule: Brute Force Login Attempts
+| MITRE ATT&CK  : T1110 - Brute Force
+| Severity      : MEDIUM / HIGH
+| Author        : Manuka Sathvik
+| ============================================================
+|
+| DESCRIPTION:
+|   Detects repeated failed SSH/login attempts from a single
+|   source IP targeting one or more user accounts.
+|   Threshold of 5+ failures = MEDIUM; 20+ = HIGH.
+|
+| HOW TO USE:
+|   Paste into Splunk Search & Reporting and run.
+|   Adjust time range to last 15 minutes for real-time triage.
+|
+| FALSE POSITIVE TUNING:
+|   Whitelist known jump servers or IT admin IPs by adding:
+|   | where src_ip!="<trusted_ip>"
+
+index=main sourcetype=linux_secure "Failed password"
+| rex field=_raw "Failed password for (?:invalid user )?(?P<user>\S+) from (?P<src_ip>\d+\.\d+\.\d+\.\d+)"
+| stats count by src_ip, user
+| where count > 5
+| eval mitre_technique="T1110 - Brute Force"
+| eval severity=case(
+    count > 20, "HIGH",
+    count > 5,  "MEDIUM",
+    true(),     "LOW"
+  )
+| eval recommendation=case(
+    severity="HIGH",   "Block src_ip immediately at firewall",
+    severity="MEDIUM", "Monitor and correlate with other alerts",
+    true(),            "Log for baseline"
+  )
+| table src_ip, user, count, severity, mitre_technique, recommendation
+| sort -count

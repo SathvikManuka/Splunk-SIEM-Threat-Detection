@@ -1,0 +1,41 @@
+| ============================================================
+| Detection Rule: DNS-Based C2 Communication
+| MITRE ATT&CK  : T1071.004 - Application Layer Protocol: DNS
+| Severity      : HIGH
+| Author        : Manuka Sathvik
+| ============================================================
+|
+| DESCRIPTION:
+|   Detects potential DNS tunnelling or C2 beaconing by
+|   identifying endpoints generating high DNS query volume
+|   with a high count of unique domains (DGA pattern).
+|
+|   Legitimate users rarely query 50+ unique domains in a
+|   short window. This pattern is common in:
+|     - DNS tunnelling tools (e.g., dnscat2, iodine)
+|     - DGA-based malware C2 callbacks
+|
+| HOW TO USE:
+|   Run over a 1-hour window for best signal-to-noise ratio.
+|
+| FALSE POSITIVE TUNING:
+|   DNS resolvers and CDN nodes will trigger this.
+|   Whitelist known DNS infrastructure IPs.
+
+index=main sourcetype=dns
+| stats
+    count                as total_queries,
+    dc(query)            as unique_domains,
+    values(query)        as queried_domains
+  by src_ip
+| where total_queries > 100 AND unique_domains > 50
+| eval ratio=round(unique_domains/total_queries, 2)
+| eval mitre_technique="T1071.004 - Application Layer Protocol: DNS"
+| eval severity="HIGH"
+| eval alert=case(
+    ratio > 0.8, "LIKELY DNS TUNNELLING - Very high unique domain ratio",
+    ratio > 0.5, "SUSPICIOUS - Possible DGA C2 activity",
+    true(),      "ANOMALOUS - Investigate further"
+  )
+| table src_ip, total_queries, unique_domains, ratio, alert, severity, mitre_technique
+| sort -total_queries

@@ -1,0 +1,21 @@
+# Splunk configuration with credentials
+*.conf
+local/
+
+# Real log files — only synthetic samples should be committed
+*.log
+real-logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Python scripts if added later
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Screenshots generated locally (keep only committed ones)
+screenshots/*
+!screenshots/.gitkeep
