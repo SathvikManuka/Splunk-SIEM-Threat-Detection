@@ -2,11 +2,11 @@
 
 ![Splunk](https://img.shields.io/badge/Splunk-SIEM-FF6B35?style=flat&logo=splunk&logoColor=white)
 ![MITRE ATT&CK](https://img.shields.io/badge/MITRE-ATT%26CK-red?style=flat)
-![Blue Team](https://img.shields.io/badge/Blue-Team-1E8449?style=flat)
+![Blue Team](https://img.shields.io/badge/Blue--Team-1E8449?style=flat)
 ![SPL](https://img.shields.io/badge/SPL-Detection%20Rules-orange?style=flat)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat)
 
-A Splunk-based threat detection lab simulating a SOC environment. Ingests DNS and HTTP logs, applies SPL detection rules to surface anomalous traffic patterns, and provides dashboards to monitor alerts and Indicators of Compromise (IOCs) — mapped to the MITRE ATT&CK framework.
+A Splunk-based threat detection lab simulating a SOC environment. Ingests DNS and HTTP logs, applies SPL detection rules to surface anomalous traffic patterns, and provides a unified dashboard to monitor alerts and Indicators of Compromise (IOCs) — all mapped to the MITRE ATT&CK framework.
 
 ---
 
@@ -14,20 +14,20 @@ A Splunk-based threat detection lab simulating a SOC environment. Ingests DNS an
 
 | Scenario | MITRE ATT&CK Technique | Detection File |
 |---|---|---|
-| Brute Force Login Attempts | T1110 – Brute Force | `detections/brute_force.spl` |
-| DNS-based C2 Communication | T1071.004 – DNS | `detections/dns_c2_detection.spl` |
-| Privilege Escalation | T1078 – Valid Accounts | `detections/privilege_escalation.spl` |
-| Suspicious PowerShell Execution | T1059.001 – PowerShell | `detections/suspicious_powershell.spl` |
-| Anomalous HTTP Traffic | T1071.001 – Web Protocols | `detections/anomalous_http.spl` |
+| Brute Force Login Attempts | T1110 – Brute Force | `brute_force.spl` |
+| DNS-based C2 Communication | T1071.004 – DNS | `dns_c2_detection.spl` |
+| Privilege Escalation | T1078 – Valid Accounts | `privilege_escalation.spl` |
+| Suspicious PowerShell Execution | T1059.001 – PowerShell | `suspicious_powershell.spl` |
+| Anomalous HTTP Traffic | T1071.001 – Web Protocols | `anomalous_http.spl` |
 
 ---
 
 ## ⚙️ Features
 
 - **Log Ingestion** — DNS and HTTP log pipelines built in Splunk
-- **SPL Detection Rules** — 5 production-style detection queries with tuned thresholds
+- **SPL Detection Rules** — 5 production-style detection queries with tuned thresholds and inline comments
 - **MITRE ATT&CK Mapping** — every rule tagged to specific technique IDs
-- **Dashboard** — single-pane view of active alerts, top source IPs, and threat timeline
+- **Dashboard** — 6-row unified view including headline counts, timeline, top IPs, per-detection tables, and hourly heatmap
 - **Sample Logs** — synthetic DNS and HTTP logs included for immediate testing
 - **Analysis Reports** — documented findings for each detection scenario
 
@@ -37,21 +37,15 @@ A Splunk-based threat detection lab simulating a SOC environment. Ingests DNS an
 
 ```
 Splunk-SIEM-Threat-Detection/
-├── detections/
-│   ├── brute_force.spl              # T1110 - Brute Force
-│   ├── dns_c2_detection.spl         # T1071.004 - DNS C2
-│   ├── privilege_escalation.spl     # T1078 - Valid Accounts
-│   ├── suspicious_powershell.spl    # T1059.001 - PowerShell
-│   └── anomalous_http.spl           # T1071.001 - Web Protocols
-├── sample-logs/
-│   ├── dns_logs_sample.csv          # Synthetic DNS logs with C2 patterns
-│   └── http_logs_sample.csv         # Synthetic HTTP logs with anomalies
-├── dashboards/
-│   └── threat_detection_dashboard.xml  # Splunk dashboard XML
-├── reports/
-│   └── detection_findings_report.md    # Full analysis findings
-├── screenshots/
-│   └── dashboard_preview.png           # Splunk dashboard screenshot
+├── brute_force.spl              # T1110  - Brute Force
+├── dns_c2_detection.spl         # T1071.004 - DNS C2
+├── privilege_escalation.spl     # T1078  - Valid Accounts
+├── suspicious_powershell.spl    # T1059.001 - PowerShell
+├── anomalous_http.spl           # T1071.001 - Web Protocols
+├── threat_detection_dashboard.xml  # Splunk dashboard (import via UI)
+├── dns_logs_sample.csv          # Synthetic DNS logs with C2 patterns
+├── http_logs_sample.csv         # Synthetic HTTP logs with anomalies
+├── detection_findings_report.md # Full analysis findings
 └── README.md
 ```
 
@@ -60,33 +54,40 @@ Splunk-SIEM-Threat-Detection/
 ## 🚀 Setup & Usage
 
 ### Prerequisites
-- Splunk Free or Enterprise (v8.x+) — [Download here](https://www.splunk.com/en_us/download.html)
-- Python 3.8+ (for log generation scripts)
 
-### 1. Ingest sample logs into Splunk
+- Splunk Free or Enterprise (v8.x+) — [Download here](https://www.splunk.com/en_us/download.html)
+
+### 1. Ingest the sample logs
+
 ```
-Settings → Add Data → Upload → select sample-logs/dns_logs_sample.csv
-Settings → Add Data → Upload → select sample-logs/http_logs_sample.csv
+Settings → Add Data → Upload → select dns_logs_sample.csv
+Settings → Add Data → Upload → select http_logs_sample.csv
 ```
-Set sourcetype as `csv` and index as `main`.
+
+Set sourcetype as `csv` and index as `main` for both files.
 
 ### 2. Run a detection query
-Open Splunk Search & Reporting, paste any `.spl` file contents and run:
 
-```spl
-| Search & Reporting → paste contents of detections/brute_force.spl → Run
+Open **Search & Reporting**, paste any `.spl` file and hit Run:
+
+```
+Example: paste contents of brute_force.spl → Run
 ```
 
 ### 3. Import the dashboard
+
 ```
-Dashboards → Create New Dashboard → Source → paste contents of dashboards/threat_detection_dashboard.xml
+Dashboards → Create New Dashboard → Edit Source → paste contents of threat_detection_dashboard.xml → Save
 ```
+
+The dashboard has 6 rows: headline counts, alert timeline, top IPs, per-detection tables, and an hourly heatmap.
 
 ---
 
 ## 🔍 Detection Rules
 
 ### 1. Brute Force Detection (`T1110`)
+
 ```spl
 index=main sourcetype=linux_secure "Failed password"
 | stats count by src_ip, user
@@ -96,11 +97,13 @@ index=main sourcetype=linux_secure "Failed password"
 | table src_ip, user, count, severity, mitre_technique
 | sort -count
 ```
-**Logic:** Counts failed SSH login attempts per source IP per user. Threshold of 5 failures flags medium severity; 20+ flags high. Reduces false positives from legitimate typos while catching systematic brute-force attempts.
+
+**Logic:** Counts failed SSH login attempts per source IP per user. Threshold of 5 failures = MEDIUM; 20+ = HIGH. Low threshold catches systematic attacks while staying above single-typo false positives.
 
 ---
 
 ### 2. DNS C2 Communication (`T1071.004`)
+
 ```spl
 index=main sourcetype=dns
 | stats count dc(query) as unique_domains by src_ip
@@ -110,11 +113,13 @@ index=main sourcetype=dns
 | table src_ip, count, unique_domains, alert, mitre_technique
 | sort -count
 ```
-**Logic:** High DNS query volume combined with high unique domain count is a signature of DNS tunnelling or C2 beaconing (e.g., DGA-generated domains). Legitimate endpoints rarely query 50+ unique domains in a short window.
+
+**Logic:** High DNS query volume combined with high unique domain count is a signature of DNS tunnelling or C2 beaconing (e.g., DGA-generated domains). Legitimate endpoints rarely resolve 50+ unique domains in a short window.
 
 ---
 
 ### 3. Privilege Escalation (`T1078`)
+
 ```spl
 index=main sourcetype=WinEventLog EventCode=4672
 | stats count by Account_Name, Logon_Type, src_ip
@@ -124,11 +129,13 @@ index=main sourcetype=WinEventLog EventCode=4672
 | table Account_Name, Logon_Type, src_ip, count, alert, mitre_technique
 | sort -count
 ```
-**Logic:** Windows Event 4672 fires when special privileges are assigned at login. Multiple occurrences from the same account or IP — especially outside business hours — indicates potential privilege abuse or lateral movement.
+
+**Logic:** Windows Event 4672 fires when special privileges are assigned at login. Multiple occurrences from the same account, especially from unexpected IPs, indicate privilege abuse or lateral movement via valid credentials.
 
 ---
 
 ### 4. Suspicious PowerShell (`T1059.001`)
+
 ```spl
 index=main sourcetype=WinEventLog EventCode=4104
 | search ScriptBlockText IN ("*-enc*","*bypass*","*hidden*","*DownloadString*","*IEX*","*Invoke-Expression*")
@@ -137,11 +144,13 @@ index=main sourcetype=WinEventLog EventCode=4104
 | eval severity="HIGH"
 | table ComputerName, User, ScriptBlockText, count, severity, mitre_technique
 ```
-**Logic:** Event 4104 captures PowerShell script block logging. Keywords like `-enc` (base64 encoded commands), `bypass` (execution policy bypass), and `DownloadString` (downloading payloads) are strong indicators of malicious PowerShell usage.
+
+**Logic:** Event 4104 captures PowerShell script block logging. Keywords like `-enc` (base64-encoded commands), `bypass` (execution policy bypass), and `DownloadString` (payload download) are strong indicators of malicious PowerShell usage.
 
 ---
 
 ### 5. Anomalous HTTP Traffic (`T1071.001`)
+
 ```spl
 index=main sourcetype=access_combined
 | stats count avg(bytes) as avg_bytes by src_ip, uri_path, status
@@ -151,13 +160,25 @@ index=main sourcetype=access_combined
 | table src_ip, uri_path, count, avg_bytes, alert, mitre_technique
 | sort -count
 ```
-**Logic:** High-frequency successful HTTP requests to the same URI path — especially with large average response sizes — indicates web scraping, credential stuffing, or data exfiltration over HTTP.
+
+**Logic:** High-frequency successful HTTP requests to the same URI path — especially with large average response sizes — indicate web scraping, credential stuffing, or data exfiltration over HTTP.
 
 ---
 
-## 📊 Detection Findings Summary
+## 📊 Dashboard Overview
 
-See [`reports/detection_findings_report.md`](https://github.com/SathvikManuka/Splunk-SIEM-Threat-Detection/blob/main/reports/detection_findings_report.md) for full documented findings from running all detections against the sample logs.
+The `threat_detection_dashboard.xml` file provides a 6-row unified SOC view:
+
+| Row | Content |
+|---|---|
+| Row 1 | Headline single-value counts for all 5 detections (color-coded by severity) |
+| Row 2 | Alert volume line chart over the last 24 hours, broken down by detection type |
+| Row 3 | Top 10 attacking source IPs (bar chart) + Brute force targeted accounts (table) |
+| Row 4 | DNS C2 beaconing IPs (table) + Privilege escalation flagged accounts (table) |
+| Row 5 | Suspicious PowerShell executions (table) + Anomalous HTTP endpoints (table) |
+| Row 6 | Stacked column chart — alert distribution by hour of day (last 7 days) |
+
+To import: **Dashboards → Create New Dashboard → Edit Source → paste XML → Save**
 
 ---
 
@@ -195,7 +216,7 @@ Sample Log Files (CSV)
 - SPL (Search Processing Language) for threat detection
 - MITRE ATT&CK framework technique mapping
 - Brute force, C2, privilege escalation, and PowerShell detection
-- SOC alert triage and false positive tuning
+- SOC alert triage and false positive threshold tuning
 - Dashboard design for security operations
 
 ---

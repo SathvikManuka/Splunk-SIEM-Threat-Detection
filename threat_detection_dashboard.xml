@@ -1,18 +1,20 @@
 <dashboard version="1.1" theme="dark">
-  <label>🛡️ SOC Threat Detection Dashboard</label>
-  <description>Unified view of active alerts, top source IPs, and threat timeline — Manuka Sathvik</description>
+  <label>SOC Threat Detection Dashboard</label>
+  <description>Unified view of brute force, DNS C2, privilege escalation, PowerShell, and HTTP anomaly alerts — mapped to MITRE ATT&CK</description>
 
-  <!-- ── Row 1: Summary Stats ──────────────────────────────────────── -->
+  <!-- ═══════════════════════════════════════════════
+       ROW 1 — HEADLINE COUNTS
+  ═══════════════════════════════════════════════ -->
   <row>
     <panel>
+      <title>🔐 Brute Force Events (T1110)</title>
       <single>
-        <title>🔴 Brute Force Alerts</title>
         <search>
           <query>
             index=main sourcetype=linux_secure "Failed password"
             | stats count by src_ip, user
             | where count > 5
-            | stats count as total_alerts
+            | stats count as alert_count
           </query>
           <earliest>-24h</earliest>
           <latest>now</latest>
@@ -22,17 +24,19 @@
         <option name="rangeColors">["0x53A051","0xF8BE34","0xF1813F","0xDC4E41"]</option>
         <option name="rangeValues">[0,1,5]</option>
         <option name="useColors">1</option>
+        <option name="underLabel">Attacking IPs (last 24h)</option>
       </single>
     </panel>
+
     <panel>
+      <title>🌐 DNS C2 Beaconing (T1071.004)</title>
       <single>
-        <title>🟠 DNS C2 Suspects</title>
         <search>
           <query>
             index=main sourcetype=dns
             | stats count dc(query) as unique_domains by src_ip
             | where count > 100 AND unique_domains > 50
-            | stats count as total_alerts
+            | stats count as alert_count
           </query>
           <earliest>-24h</earliest>
           <latest>now</latest>
@@ -42,17 +46,40 @@
         <option name="rangeColors">["0x53A051","0xF8BE34","0xF1813F","0xDC4E41"]</option>
         <option name="rangeValues">[0,1,3]</option>
         <option name="useColors">1</option>
+        <option name="underLabel">Suspicious IPs (last 24h)</option>
       </single>
     </panel>
+
     <panel>
+      <title>⚡ Privilege Escalation (T1078)</title>
       <single>
-        <title>🟡 Privilege Escalations</title>
         <search>
           <query>
             index=main sourcetype=WinEventLog EventCode=4672
-            | stats count by Account_Name, src_ip
+            | stats count by Account_Name, Logon_Type, src_ip
             | where count > 3
-            | stats count as total_alerts
+            | stats count as alert_count
+          </query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="colorBy">value</option>
+        <option name="colorMode">block</option>
+        <option name="rangeColors">["0x53A051","0xF8BE34","0xF1813F","0xDC4E41"]</option>
+        <option name="rangeValues">[0,1,3]</option>
+        <option name="useColors">1</option>
+        <option name="underLabel">Accounts Flagged (last 24h)</option>
+      </single>
+    </panel>
+
+    <panel>
+      <title>💻 Suspicious PowerShell (T1059.001)</title>
+      <single>
+        <search>
+          <query>
+            index=main sourcetype=WinEventLog EventCode=4104
+            | search ScriptBlockText IN ("*-enc*","*bypass*","*hidden*","*DownloadString*","*IEX*","*Invoke-Expression*")
+            | stats count as alert_count
           </query>
           <earliest>-24h</earliest>
           <latest>now</latest>
@@ -62,16 +89,19 @@
         <option name="rangeColors">["0x53A051","0xF8BE34","0xF1813F","0xDC4E41"]</option>
         <option name="rangeValues">[0,1,5]</option>
         <option name="useColors">1</option>
+        <option name="underLabel">Malicious Script Blocks (last 24h)</option>
       </single>
     </panel>
+
     <panel>
+      <title>🔁 Anomalous HTTP (T1071.001)</title>
       <single>
-        <title>🔵 Suspicious PowerShell</title>
         <search>
           <query>
-            index=main sourcetype=WinEventLog EventCode=4104
-            | search ScriptBlockText IN ("*-enc*","*bypass*","*DownloadString*","*IEX*","*Invoke-Expression*")
-            | stats count as total_alerts
+            index=main sourcetype=access_combined
+            | stats count avg(bytes) as avg_bytes by src_ip, uri_path, status
+            | where count > 200 AND status=200
+            | stats count as alert_count
           </query>
           <earliest>-24h</earliest>
           <latest>now</latest>
@@ -79,55 +109,59 @@
         <option name="colorBy">value</option>
         <option name="colorMode">block</option>
         <option name="rangeColors">["0x53A051","0xF8BE34","0xF1813F","0xDC4E41"]</option>
-        <option name="rangeValues">[0,1,3]</option>
+        <option name="rangeValues">[0,1,5]</option>
         <option name="useColors">1</option>
+        <option name="underLabel">Suspicious Endpoints (last 24h)</option>
       </single>
     </panel>
   </row>
 
-  <!-- ── Row 2: Alert Timeline ─────────────────────────────────────── -->
+  <!-- ═══════════════════════════════════════════════
+       ROW 2 — ALERT TIMELINE
+  ═══════════════════════════════════════════════ -->
   <row>
     <panel>
+      <title>📈 Alert Volume Over Time (All Detections)</title>
       <chart>
-        <title>📈 Alert Volume Over Time (Last 24h)</title>
         <search>
           <query>
-            (index=main sourcetype=linux_secure "Failed password")
-            OR (index=main sourcetype=dns)
-            OR (index=main sourcetype=WinEventLog EventCode IN (4104,4672))
-            | eval alert_type=case(
-                sourcetype="linux_secure",  "Brute Force",
-                sourcetype="dns",           "DNS Anomaly",
-                EventCode=4672,             "Privilege Escalation",
-                EventCode=4104,             "Suspicious PowerShell",
-                true(),                     "Other"
+            index=main ((sourcetype=linux_secure "Failed password") OR (sourcetype=dns) OR (sourcetype=WinEventLog EventCode=4672) OR (sourcetype=WinEventLog EventCode=4104) OR (sourcetype=access_combined))
+            | eval detection=case(
+                sourcetype="linux_secure", "Brute Force",
+                sourcetype="dns", "DNS C2",
+                (sourcetype="WinEventLog" AND EventCode="4672"), "Privilege Escalation",
+                (sourcetype="WinEventLog" AND EventCode="4104"), "PowerShell",
+                sourcetype="access_combined", "HTTP Anomaly",
+                true(), "Other"
               )
-            | timechart count by alert_type span=1h
+            | timechart span=1h count by detection
           </query>
           <earliest>-24h</earliest>
           <latest>now</latest>
         </search>
-        <option name="charting.chart">column</option>
-        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.chart">line</option>
+        <option name="charting.chart.showDataLabels">none</option>
         <option name="charting.legend.placement">bottom</option>
         <option name="charting.axisTitleX.text">Time</option>
-        <option name="charting.axisTitleY.text">Alert Count</option>
-        <option name="charting.seriesColors">["0xDC4E41","0xF1813F","0xF8BE34","0x6DB7C6","0x53A051"]</option>
+        <option name="charting.axisTitleY.text">Event Count</option>
+        <option name="charting.chart.nullValueMode">connect</option>
+        <option name="height">250</option>
       </chart>
     </panel>
   </row>
 
-  <!-- ── Row 3: Top Attacking IPs + Brute Force Table ─────────────── -->
+  <!-- ═══════════════════════════════════════════════
+       ROW 3 — TOP SOURCE IPs + BRUTE FORCE TABLE
+  ═══════════════════════════════════════════════ -->
   <row>
     <panel>
+      <title>🌍 Top 10 Attacking Source IPs</title>
       <chart>
-        <title>🌐 Top Source IPs by Alert Count</title>
         <search>
           <query>
-            (index=main sourcetype=linux_secure "Failed password")
-            OR (index=main sourcetype=access_combined status=401)
-            | rex field=_raw "from (?P<src_ip>\d+\.\d+\.\d+\.\d+)"
-            | stats count by src_ip
+            index=main ((sourcetype=linux_secure "Failed password") OR (sourcetype=dns) OR (sourcetype=access_combined))
+            | eval src=coalesce(src_ip, clientip)
+            | stats count by src
             | sort -count
             | head 10
           </query>
@@ -135,102 +169,179 @@
           <latest>now</latest>
         </search>
         <option name="charting.chart">bar</option>
-        <option name="charting.axisTitleX.text">Alert Count</option>
+        <option name="charting.chart.orientation">horizontal</option>
+        <option name="charting.axisTitleX.text">Event Count</option>
         <option name="charting.axisTitleY.text">Source IP</option>
-        <option name="charting.seriesColors">["0xDC4E41"]</option>
+        <option name="height">250</option>
       </chart>
     </panel>
+
     <panel>
+      <title>🔐 Brute Force — Top Targeted Accounts</title>
       <table>
-        <title>🔑 Active Brute Force Attempts</title>
         <search>
           <query>
             index=main sourcetype=linux_secure "Failed password"
-            | rex field=_raw "Failed password for (?:invalid user )?(?P<user>\S+) from (?P<src_ip>\d+\.\d+\.\d+\.\d+)"
             | stats count by src_ip, user
             | where count > 5
-            | eval severity=if(count>20,"🔴 HIGH","🟡 MEDIUM")
+            | eval severity=if(count>20,"HIGH","MEDIUM")
+            | eval mitre="T1110 – Brute Force"
             | sort -count
             | head 20
-            | table src_ip, user, count, severity
-            | rename src_ip as "Source IP", user as "Target User", count as "Attempts", severity as "Severity"
+            | table src_ip, user, count, severity, mitre
+            | rename src_ip as "Source IP", user as "Target User", count as "Failed Attempts", severity as "Severity", mitre as "MITRE Technique"
           </query>
           <earliest>-24h</earliest>
           <latest>now</latest>
         </search>
-        <option name="dataOverlayMode">heatmap</option>
+        <option name="wrap">true</option>
         <option name="rowNumbers">true</option>
+        <format type="color" field="Severity">
+          <colorPalette type="map">{"HIGH":#DC4E41,"MEDIUM":#F8BE34}</colorPalette>
+        </format>
+        <option name="height">250</option>
       </table>
     </panel>
   </row>
 
-  <!-- ── Row 4: DNS C2 + HTTP Exfil ───────────────────────────────── -->
+  <!-- ═══════════════════════════════════════════════
+       ROW 4 — DNS C2 + PRIVILEGE ESCALATION
+  ═══════════════════════════════════════════════ -->
   <row>
     <panel>
+      <title>🌐 DNS C2 — Suspicious Beaconing IPs</title>
       <table>
-        <title>🌀 DNS C2 / DGA Suspects</title>
         <search>
           <query>
             index=main sourcetype=dns
             | stats count dc(query) as unique_domains by src_ip
             | where count > 100 AND unique_domains > 50
-            | eval ratio=round(unique_domains/count,2)
-            | eval verdict=case(ratio>0.8,"🔴 Likely C2",ratio>0.5,"🟠 Suspicious",true(),"🟡 Review")
+            | eval mitre="T1071.004 – DNS"
+            | eval alert="Possible DNS C2 / DGA"
             | sort -count
-            | table src_ip, count, unique_domains, ratio, verdict
-            | rename src_ip as "Source IP", count as "Total Queries", unique_domains as "Unique Domains", ratio as "DGA Ratio", verdict as "Verdict"
+            | table src_ip, count, unique_domains, alert, mitre
+            | rename src_ip as "Source IP", count as "Total Queries", unique_domains as "Unique Domains", alert as "Alert", mitre as "MITRE Technique"
           </query>
           <earliest>-24h</earliest>
           <latest>now</latest>
         </search>
+        <option name="wrap">true</option>
+        <option name="rowNumbers">true</option>
+        <option name="height">220</option>
       </table>
     </panel>
+
     <panel>
+      <title>⚡ Privilege Escalation — Flagged Accounts</title>
       <table>
-        <title>📤 Anomalous HTTP / Possible Exfiltration</title>
         <search>
           <query>
-            index=main sourcetype=access_combined
-            | stats count avg(bytes) as avg_bytes sum(bytes) as total_bytes by src_ip
-            | where count > 200
-            | eval avg_kb=round(avg_bytes/1024,1)
-            | eval total_mb=round(total_bytes/1048576,2)
-            | eval risk=if(avg_bytes>500000,"🔴 High — Possible Exfil","🟡 Medium — High Volume")
+            index=main sourcetype=WinEventLog EventCode=4672
+            | stats count by Account_Name, Logon_Type, src_ip
+            | where count > 3
+            | eval mitre="T1078 – Valid Accounts"
+            | eval alert="Sensitive Privilege Assignment"
             | sort -count
-            | head 10
-            | table src_ip, count, avg_kb, total_mb, risk
-            | rename src_ip as "Source IP", count as "Requests", avg_kb as "Avg KB", total_mb as "Total MB", risk as "Risk"
+            | table Account_Name, Logon_Type, src_ip, count, alert, mitre
+            | rename Account_Name as "Account", Logon_Type as "Logon Type", src_ip as "Source IP", count as "Occurrences", alert as "Alert", mitre as "MITRE Technique"
           </query>
           <earliest>-24h</earliest>
           <latest>now</latest>
         </search>
+        <option name="wrap">true</option>
+        <option name="rowNumbers">true</option>
+        <option name="height">220</option>
       </table>
     </panel>
   </row>
 
-  <!-- ── Row 5: MITRE ATT&CK Heatmap ──────────────────────────────── -->
+  <!-- ═══════════════════════════════════════════════
+       ROW 5 — POWERSHELL + HTTP ANOMALY
+  ═══════════════════════════════════════════════ -->
   <row>
     <panel>
+      <title>💻 Suspicious PowerShell Executions</title>
       <table>
-        <title>🗺️ MITRE ATT&amp;CK Technique Coverage</title>
         <search>
           <query>
-            | makeresults
-            | eval data="T1110|Brute Force|Credential Access|Active|linux_secure failed logins
-T1071.004|DNS C2|Command and Control|Active|DNS query volume + DGA ratio
-T1078|Valid Accounts|Privilege Escalation|Active|WinEvent 4672 sensitive privileges
-T1059.001|PowerShell|Execution|Active|WinEvent 4104 script block logging
-T1071.001|Web Protocols|Command and Control|Active|HTTP anomaly + exfil detection
-T1566|Phishing|Initial Access|Covered in Email Analyser repo|-"
-            | makemv delim="
-" data
-            | mvexpand data
-            | rex field=data "(?P<technique>[^|]+)\|(?P<name>[^|]+)\|(?P<tactic>[^|]+)\|(?P<status>[^|]+)\|(?P<notes>.+)"
-            | table technique, name, tactic, status, notes
-            | rename technique as "Technique ID", name as "Name", tactic as "Tactic", status as "Status", notes as "Detection Notes"
+            index=main sourcetype=WinEventLog EventCode=4104
+            | search ScriptBlockText IN ("*-enc*","*bypass*","*hidden*","*DownloadString*","*IEX*","*Invoke-Expression*")
+            | stats count by ComputerName, User, ScriptBlockText
+            | eval mitre="T1059.001 – PowerShell"
+            | eval severity="HIGH"
+            | sort -count
+            | head 20
+            | table ComputerName, User, ScriptBlockText, count, severity, mitre
+            | rename ComputerName as "Host", User as "User", ScriptBlockText as "Script Block", count as "Count", severity as "Severity", mitre as "MITRE Technique"
           </query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
         </search>
+        <option name="wrap">true</option>
+        <option name="rowNumbers">true</option>
+        <format type="color" field="Severity">
+          <colorPalette type="map">{"HIGH":#DC4E41}</colorPalette>
+        </format>
+        <option name="height">220</option>
       </table>
+    </panel>
+
+    <panel>
+      <title>🔁 Anomalous HTTP — High Volume Endpoints</title>
+      <table>
+        <search>
+          <query>
+            index=main sourcetype=access_combined
+            | stats count avg(bytes) as avg_bytes by src_ip, uri_path, status
+            | where count > 200 AND status=200
+            | eval avg_bytes=round(avg_bytes,0)
+            | eval mitre="T1071.001 – Web Protocols"
+            | eval alert=if(avg_bytes>500000,"Possible Data Exfiltration","High Volume HTTP")
+            | sort -count
+            | head 20
+            | table src_ip, uri_path, count, avg_bytes, alert, mitre
+            | rename src_ip as "Source IP", uri_path as "URI Path", count as "Request Count", avg_bytes as "Avg Bytes", alert as "Alert", mitre as "MITRE Technique"
+          </query>
+          <earliest>-24h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="wrap">true</option>
+        <option name="rowNumbers">true</option>
+        <option name="height">220</option>
+      </table>
+    </panel>
+  </row>
+
+  <!-- ═══════════════════════════════════════════════
+       ROW 6 — THREAT HEATMAP BY HOUR
+  ═══════════════════════════════════════════════ -->
+  <row>
+    <panel>
+      <title>🕐 Threat Activity — Alerts by Hour of Day (Last 7 Days)</title>
+      <chart>
+        <search>
+          <query>
+            index=main ((sourcetype=linux_secure "Failed password") OR (sourcetype=WinEventLog EventCode=4672) OR (sourcetype=WinEventLog EventCode=4104))
+            | eval hour=strftime(_time, "%H:00")
+            | eval detection=case(
+                sourcetype="linux_secure", "Brute Force",
+                (sourcetype="WinEventLog" AND EventCode="4672"), "Privilege Escalation",
+                (sourcetype="WinEventLog" AND EventCode="4104"), "PowerShell",
+                true(), "Other"
+              )
+            | stats count by hour, detection
+            | sort hour
+          </query>
+          <earliest>-7d</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">column</option>
+        <option name="charting.chart.stackMode">stacked</option>
+        <option name="charting.axisTitleX.text">Hour of Day</option>
+        <option name="charting.axisTitleY.text">Alert Count</option>
+        <option name="charting.legend.placement">bottom</option>
+        <option name="height">220</option>
+      </chart>
     </panel>
   </row>
 
